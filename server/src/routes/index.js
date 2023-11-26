@@ -88,11 +88,11 @@ router.route("/payment")
   .get(Controller.getAllPayment)
   .post(Controller.createPaymentPreference);
 
-router.get("/payment/:id", Controller.getOrdenId);
-
 router.route("/payment/success")
   .get(Controller.successPayment);
   //res.send('PAGO REALIZADO CON EXITO')
+
+router.get("/payment/:id", Controller.getOrdenId);
 
 
 module.exports = router;
