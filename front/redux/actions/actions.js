@@ -19,14 +19,13 @@ import {
 const endpoint = ENDPOINT;
 
 export const getProjects = () => {
-  console.log(endpoint);
   return async (dispatch) => {
     try {
 
       const { data } = await axios(`${endpoint}projects`);
-      console.log(`${endpoint}projects`);
+      //console.log(`${endpoint}projects`);
 
-      console.log(data);
+      //console.log(data);
 
       return dispatch({ type: GET_ALL_PROJECTS, payload: data });
     } catch (error) {
@@ -95,7 +94,7 @@ export const addProjects = (data) => {
         url: `${endpoint}projects/`,
         data: data,
       });
-      console.log(respuesta);
+      //console.log(respuesta);
       return dispatch({
         type: SET_ALERT,
         payload: respuesta,
@@ -121,7 +120,7 @@ export const getPremiumsProjects = () => {
   return async (dispatch) => {
     try {
       const { data } = await axios(`${endpoint}projects`);
-      console.log(`${endpoint}projects`);
+      //console.log(`${endpoint}projects`);
       return dispatch({ type: GET_PREMIUM_PROJECT, payload: data });
     } catch (error) {
       /*       return dispatch({
@@ -141,7 +140,7 @@ export const createUser = (data) => {
         url: `${endpoint}sign-up`,
         data: data,
       });
-      console.log(respuesta);
+      //console.log(respuesta);
       return dispatch({
         type: SET_ALERT,
         payload: respuesta,
@@ -178,8 +177,8 @@ export const loginUser = (login) => {
 };
 
 export const updateProject = (data, id) => {
-  console.log("data de action es", data);
-  console.log("id de action es", id);
+  // console.log("data de action es", data);
+  // console.log("id de action es", id);
   return async (dispatch) => {
     try {
       const respuesta = await axios({
@@ -187,7 +186,7 @@ export const updateProject = (data, id) => {
         url: `${endpoint}projects/${id}`,
         data: data,
       });
-      console.log(respuesta);
+      //console.log(respuesta);
       return dispatch({
         type: SET_ALERT,
         payload: respuesta,
