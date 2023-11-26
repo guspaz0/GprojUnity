@@ -1,5 +1,5 @@
 const mercadopago = require('mercadopago');
-const {MP_TOKEN, DB_HOST, PORT, CLIENT_HOST} = process.env
+const {MP_TOKEN, DB_HOST, PORT, CLIENT_HOST, SERVER} = process.env
 const { Order_detail , Order, Payments, Users, Projects } = require('../db.js');
 const paymentsServices = require('../services/payment.js');
 const {Sequelize} = require('sequelize');
@@ -42,8 +42,8 @@ const paymenntsControllers = {
               raw: true
           }),
           back_urls: {
-              success: `http://${DB_HOST}:${PORT}/payment/success`,
-              pending: `http://${DB_HOST}/error`,
+              success: `${SERVER}/payment/success`,
+              pending: `${SERVER}/error`,
               failure: `https://proj-unity.vercel.app`,
           },
           notification_url: "https://3eb3-181-29-72-133.ngrok.io/webhook",
