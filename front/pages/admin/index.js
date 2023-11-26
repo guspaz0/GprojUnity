@@ -72,7 +72,7 @@ const AdminDashboard = () => {
   // }, [dispatch, id]);
 
   const userDashboardData = useSelector(
-    (state) => state.userDashboard.userDashboardData
+    (state) => state.userDashboard?.userDashboardData
   );
   console.log(userDashboardData);
 
@@ -107,7 +107,7 @@ const AdminDashboard = () => {
                   title="Ventas"
                   value={
                     userDashboardData
-                      ? userDashboardData.summaryData.totalSales
+                      ? userDashboardData.summaryData?.totalSales
                       : "no tienes data que mostrar"
                   }
                   icon={<ListAltIcon />}
@@ -116,7 +116,7 @@ const AdminDashboard = () => {
                   title="Ganancias"
                   value={
                     userDashboardData
-                      ? userDashboardData.summaryData.totalRevenue
+                      ? userDashboardData.summaryData?.totalRevenue
                       : "no tienes data que mostrar"
                   }
                   icon={<MonetizationOnIcon />}
@@ -125,7 +125,7 @@ const AdminDashboard = () => {
                   title="Precio Promedio"
                   value={
                     userDashboardData
-                      ? userDashboardData.summaryData.averageSalesPerUser
+                      ? userDashboardData.summaryData?.averageSalesPerUser
                       : "XXXXXXXXXXXXXXXXXXXXXXXXXX"
                   }
                   icon={<LocalOfferIcon />}
@@ -154,21 +154,21 @@ const AdminDashboard = () => {
               </Heading>
               <Text fontSize="lg" mb={2}>
                 Total de Proyectos:{" "}
-                {userDashboardData?.summaryData.totalProjects}
+                {userDashboardData?.summaryData?.totalProjects}
               </Text>
               <Text fontSize="lg" mb={2}>
-                Total de Usuarios: {userDashboardData?.summaryData.totalUsers}
+                Total de Usuarios: {userDashboardData?.summaryData?.totalUsers}
               </Text>
               <Text fontSize="lg" mb={2}>
                 Promedio de Ventas por usuario:{" "}
-                {userDashboardData?.summaryData.averageSalesPerUser}
+                {userDashboardData?.summaryData?.averageSalesPerUser}
               </Text>
               <Text fontSize="lg" mb={2}>
-                Ventas Totales: {userDashboardData?.summaryData.totalSales}
+                Ventas Totales: {userDashboardData?.summaryData?.totalSales}
               </Text>
               <Text fontSize="lg" mb={2}>
                 Tiempo promedio de uso diario:{" "}
-                {userDashboardData?.summaryData.averageDailyUsage}
+                {userDashboardData?.summaryData?.averageDailyUsage}
               </Text>
             </Box>
           </Grid>

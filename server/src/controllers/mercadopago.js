@@ -1,149 +1,153 @@
-const mercadopago = require("mercadopago");
-const { MP_TOKEN, DB_HOST, CLIENT_HOST } = process.env;
-const { Order_detail, Order, Payments, Users } = require("../db.js");
-const paymentsServices = require("../services/payment.js");
-const { Sequelize } = require("sequelize");
-const { projects } = require("../utils/index.js");
+const mercadopago = require('mercadopago');
+const {MP_TOKEN, DB_HOST, PORT, CLIENT_HOST} = process.env
+const { Order_detail , Order, Payments, Users, Projects } = require('../db.js');
+const paymentsServices = require('../services/payment.js');
+const {Sequelize} = require('sequelize');
 
 // Configura las credenciales de MercadoPago
 const paymenntsControllers = {
-  // Función para crear una preferencia de pago en MercadoPago
-  createPaymentPreference: async function (req, res) {
-    // const { items, payer, concepto, status } = req.body;
-    mercadopago.configure({
-      access_token: MP_TOKEN,
-    });
-    //const id_orden= 1
-    const orderNumber = await Payments.findAll({
-      attributes: [Sequelize.fn("max", Sequelize.col("orderNumber"))],
-      raw: true,
-    });
-    compra = req.body;
-    items = compra.map((item) => {
-      return {
-        buyer: item.buyer,
-        id: item.id,
-        title: item.title,
-        currency_id: "ARS",
-        unit_price: Number(item.unit_price),
-        quantity: 1,
+    // Función para crear una preferencia de pago en MercadoPago
+    createPaymentPreference:  async function(req, res )  {
+      mercadopago.configure({
+          access_token: MP_TOKEN,
+      });
+      const lastOrderNumber = await Payments.findAll({
+          attributes: [Sequelize.fn('max', Sequelize.col('orderNumber'))],
+          raw: true
+      })
+  
+      const orderNumber = lastOrderNumber[0].max+1
+      let items = req.body
+      for (let i in items) {
+          const { unit_price, id, buyer, concept, status } = items[i]
+          const createOrder = await Payments.create({
+              paymentAmount: unit_price,
+              orderNumber: orderNumber,
+              product: id,
+              buyer: buyer,
+              concept: concept? concept : 'venta', //venta, donacion o devolucion
+              status: status? status : 'created',
+          })
+      }
+      const totalPrecio = req.body.reduce((acumulador, producto) =>
+          acumulador + parseFloat(producto.unit_price), 0);
+  
+      const preference = {
+          items,
+          total_amount: totalPrecio,
+          external_reference : `${orderNumber}`,
+          payer: await Users.findOne({
+              where: {id: items[0].buyer},
+              attributes: ['name', 'email'],
+              raw: true
+          }),
+          back_urls: {
+              success: `http://${DB_HOST}:${PORT}/payment/success`,
+              pending: `http://${DB_HOST}/error`,
+              failure: `https://proj-unity.vercel.app`,
+          },
+          notification_url: "https://3eb3-181-29-72-133.ngrok.io/webhook",
+          auto_return: "approved",
       };
-    });
-    /* [
-      {  
-        buyer:compra[0].UserId,
-        id:compra[0].projectId,
-         title: compra[0].title,
-         currency_id: 'ARS',
-         unit_price:Number(compra[0].unit_price),
-         quantity: 1,
-        
-    },
-   {  
-        buyer:compra[1].UserId,
-        id:compra[1].projectId,
-        title: compra[1].title,
-        currency_id: 'ARS',
-        unit_price:Number(compra[1].unit_price),
-        quantity: 1,
-       
-},
-{  
-        buyer:compra[2].UserId,
-        id:compra[2].projectId,  
-        title: compra[2].title,
-        currency_id: 'ARS',
-        unit_price:Number(compra[2].unit_price),
-        quantity: 1,
-        
-}, 
-    ]*/
-console.log(items);
-
-    const preference = {
-      items,
-      total_amount: 1,
-      external_reference: `${orderNumber[0].max + 1}`,
-      back_urls: {
-        success: "http://localhost:3001/createPayment/succes",
-        pending: `${CLIENT_HOST}/error`,
-        failure: `${CLIENT_HOST}/pending`,
-      },
-      notification_url: "https://3eb3-181-29-72-133.ngrok.io/webhook",
-      auto_return: "approved",
-    };
-    // console.log(preference)
+      try {
+          const response = await mercadopago.preferences.create(preference);
+          //console.log(response.body);
+          global.id = response.body.id;
+          init_point = response.body.init_point;
+          projects = response.body.items.map(e=>{
+              return{
+              id:e.id,
+              price:e.unit_price
+              }
+          })
+          for (let i in projects) {
+              await Payments.update({
+                  paymentId: global.id,
+                  status:"processing",
+              },
+              {where: {
+                  orderNumber: orderNumber,
+                  product: projects[i].id
+              }
+              });
+          }
+          const queryOrder = await Payments.findAll({where: {orderNumber: orderNumber}, raw: true})
+          let itemsDb = []
+          for (let i in queryOrder) {
+              let { product, paymentAmount} = queryOrder[i]
+              let productName = await Projects.findOne({where: {id: product}, attributes: ['name'], raw: true})
+              itemsDb = [
+              ...itemsDb,
+                  {
+                      id: product,
+                      title: productName.name,
+                      unit_price: paymentAmount,
+                      quantity: 1
+                  }
+              ] 
+          }
+          res.json({id: global.id, init_point: response.body.init_point, itemsDb})
+      } catch (error) {
+          console.log(error);
+      }
+  },
+  successPayment: async function (req,res) {
     try {
-      const response = await mercadopago.preferences.create(preference);
-      // console.log(response.body);
-      global.id = response.body.id;
-      init_point = response.body.init_point;
-      const totalPrecio = items.reduce(
-        (acumulador, producto) => acumulador + parseFloat(producto.unit_price),
-        0
-      );
-
-      console.log(items);
-
-      const orderDb = await Payments.create({
-        paymentId: global.id,
-        status: "created",
-        orderNumber: orderNumber[0].max + 1,
-        buyer: 1,
-        projects: 1,
-        paymentAmount: totalPrecio,
-      });
-
-      // console.log(orderDb)
-      res.json({
-        id: global.id,
-        init_point: response.body.init_point,
-        orderDb,
-      });
+      const { 
+        collection_id,
+        collection_status,
+        payment_id,
+        status,
+        external_reference,
+        payment_type,
+        merchant_account_id
+      } = req.query
+      const { id } = req.params
+      if (status === 'approved') {
+        await Payments.update({
+          status: 'completed'
+        },
+        {where: 
+          {
+            orderNumber: external_reference,
+          }
+        })
+      }
+      //res.redirect('https://proj-unity.vercel.app/')
+      res.status(200).redirect(`${CLIENT_HOST}/`)
     } catch (error) {
-      console.log(error);
+      return error
     }
   },
-
-  // falta relacionar las nuevas compras con projectId y userId
-
-  // const items = [
-  //   {
-  //     id: projectId,
-  //     title: title,
-  //     unit_price:Number(unit_price),
-  //     quantity: 1
-  //   },
-  // ]
-  // const totalPrecio = items.reduce((acumulador, producto) =>
-  //   acumulador + parseFloat(producto.unit_price), 0);
-
-  // res.json({
-  //   id_mercadopago: global.id,
-  //   init_point: response.body.init_point,
-  //   items: response.body.items,
-  //   back_urls: response.body.back_urls,
-  //   total_amount:totalPrecio
-  // });
-
-  getOrdenId: async function (req, res) {
-    try {
-      const { id } = req.params;
-      const payment = await paymentsServices.paymentId(id);
-      res.status(200).json(payment);
+  getOrdenId: async function(req, res){
+  try {
+    const {id} = req.params
+    const  payment = await paymentsServices.paymentId(id);
+        res.status(200).json(payment);
     } catch (error) {
-      res.status(500).json(error.message);
+        res.status(500).json(error.message);
     }
   },
-  getAllPayment: async function (req, res) {
+  getAllPayment: async function(req, res){
     try {
-      const paymentsData = req.body;
-      const allPayments = await paymentsServices.allPayments(paymentsData);
-      res.status(200).json(allPayments);
+      const { desde, hasta } = req.query
+      const currentTime = new Date()
+      let fechaDesde = desde? desde.split('-') : [];
+      fechaDesde.length !== 3?         
+          fechaDesde = new Date(currentTime.getFullYear(),currentTime.getMonth(),1,0,0,0)
+          : fechaDesde = new Date(parseInt(fechaDesde[0]),parseInt(fechaDesde[1])-1,parseInt(fechaDesde[2]),0,0,0); //<<--- si no esta definida la fecha desde, se define por defecto desde el primero del corriente mes
+      
+      let fechaHasta = hasta? hasta.split('-') : [];
+      fechaHasta.length !== 3? 
+          fechaHasta = currentTime
+          : fechaHasta = new Date(parseInt(fechaHasta[0]),parseInt(fechaHasta[1])-1,parseInt(fechaHasta[2]),0,0,0);
+      
+          const allPayments = await paymentsServices.allPayments({...req.query, desde: fechaDesde, hasta: fechaHasta});
+        res.status(200).json(allPayments)
     } catch (error) {
-      res.status(500).json(error.message);
+        res.status(500).json(error.message)
     }
-  },
+  }
 };
-
-module.exports = paymenntsControllers;
+        
+module.exports =  paymenntsControllers

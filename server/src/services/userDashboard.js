@@ -1,6 +1,6 @@
 const {Users, UserTypes, Projects, Payments, Ratings, ProjectUser} = require('../db');
 const {Op, Sequelize} = require('sequelize');
-const {format} = require('date-fns')
+const {format, addDays} = require('date-fns')
 
 const DashboardService = {
     Dashboard: async function (id, fecha) {
@@ -26,96 +26,57 @@ const DashboardService = {
             const devoluciones = await this.userDevolutions(null,fecha);
             const donaciones = await this.userDonations(null,fecha);
             const {count, rows } = await Projects.findAndCountAll({where: {deletedAt: null}, raw: true})
+            const averageSalesperUser = await this.averageSales(null,fecha)
             const Months = [
                 new Date(fecha.getFullYear(),fecha.getMonth()-2,fecha.getDate(),0,0,0),
                 new Date(fecha.getFullYear(),fecha.getMonth()-1,fecha.getDate(),0,0,0),
                 new Date(fecha.getFullYear(),fecha.getMonth(),fecha.getDate(),0,0,0)
             ]
-            const salesMonths = [
-                {
-                    sales: await this.userSales(null,Months[0]),
-                    devolutions: await this.userDevolutions(null,Months[0])
-                },
-                {
-                    sales: await this.userSales(null,Months[1]),
-                    devolutions: await this.userDevolutions(null,Months[1])
-                },
-                {
-                    sales: await this.userSales(null,Months[2]),
-                    devolutions: await this.userDevolutions(null,Months[2])
-                }
-            ]
-            let topProjectsData = await this.salesPerProjects(null,fecha)
-            topProjectsData = topProjectsData.slice(0,3)
-            topProjectsData = [
-                {
-                    project: await Projects.findOne({where: {id: topProjectsData[0].product}, attributes: ['name'], raw: true}),
-                    ventas: topProjectsData[0].Count
-                },
-                {
-                    project: await Projects.findOne({where: {id: topProjectsData[1].product}, attributes: ['name'], raw: true}),
-                    ventas: topProjectsData[1].Count
-                },
-                {
-                    project: await Projects.findOne({where: {id: topProjectsData[2].product}, attributes: ['name'], raw: true}),
-                    ventas: topProjectsData[2].Count}
-            ]
+
+            let salesData = []
+            for (let i in Months) {
+                const sales = await this.userSales(null,Months[i])
+                const devolutions = await this.userDevolutions(null,Months[i])
+                salesData.push({
+                    month: format(Months[i], 'MMMM'),
+                    ventas: (sales.valorizado - devolutions.valorizado).toFixed(2)
+                })
+            }
+            
+            let ProjectSales = await this.salesPerProjects(null,fecha)
+            let topProjectsData =  []
+            for (let i in ProjectSales) {
+                if (i == 2) break
+                let { product, totalSales, Count } = ProjectSales[i]
+                if (!product) break
+                const projectData = await Projects.findOne({where: {id: product}, attributes: ['name'], raw: true, paranoid: false})
+                topProjectsData.push({ project: projectData.name, ventas: Count })
+            }
             let topRankedProjectsData = await this.topRankedProject()
-            let topRankProject = topRankedProjectsData.slice(0,3)
+            let topRankProject = []
+            for (let i in topRankedProjectsData) {
+                if (i == 2) break
+                let { name, averageScore } = topRankedProjectsData[i]
+                topRankProject.push({ project: name, ranking: averageScore.toFixed(2) })
+            }
 
             //const {id,name,email,image,active,twitterUser,githubUser,linkedinUser,role,Sales} = await this.userOfTheMonth(fecha);
             return { 
                 summaryData: {
-                    totalProjects: totalProjects.count,
-                    totalUsers: totalUsers.length,
+                    totalProjects: totalProjects.count, // ok
+                    totalUsers: totalUsers.length,  // ok
                     activeSubscriptions: 75,
-                    totalSales: sales.contador - devoluciones.contador,
+                    totalSales: sales.contador - devoluciones.contador, // 0
                     totalRevenue: `$${(sales.valorizado - devoluciones.valorizado + donaciones.valorizado).toFixed(2)}`,
-                    averageSalesPerUser: `$${await this.averageSales(null,fecha)}`,
+                    averageSalesPerUser: `$${averageSalesperUser}`, // 0.00
                     activeProjects: count,
                     averageDailyUsage: "2 horas",
                     monthlyRecurringRevenue: "$5,000",
                 },
                 userData: await this.userOfTheMonth(fecha),
-                salesData: [
-                    {   month: format(Months[0], 'MMMM'),
-                        ventas: (salesMonths[0].sales.valorizado-salesMonths[0].devolutions.valorizado).toFixed(2)
-                    },
-                    {   month: format(Months[1], 'MMMM'),
-                        ventas: (salesMonths[1].sales.valorizado-salesMonths[1].devolutions.valorizado).toFixed(2)
-                    },
-                    {   month: format(Months[2], 'MMMM'),
-                        ventas: (salesMonths[2].sales.valorizado-salesMonths[2].devolutions.valorizado).toFixed(2)
-                    }
-                ],
-                topProjectsData: [
-                    {
-                        project: topProjectsData[0].project.name,
-                        ventas: topProjectsData[0].ventas,
-                    },
-                    {
-                        project: topProjectsData[1].project.name,
-                        ventas: topProjectsData[1].ventas,
-                    },
-                    {
-                        project: topProjectsData[2].project.name,
-                        ventas: topProjectsData[2].ventas,
-                    },
-                ],
-                topRankedProjectsData: [
-                    { 
-                        project: topRankProject[0].name,
-                        ranking: topRankProject[0].averageScore.toFixed(2)
-                    },
-                    { 
-                        project: topRankProject[1].name,
-                        ranking: topRankProject[1].averageScore.toFixed(2)
-                    },
-                    { 
-                        project: topRankProject[2].name, 
-                        ranking: topRankProject[2].averageScore.toFixed(2)
-                    },
-                ],
+                salesData,
+                topProjectsData,
+                topRankedProjectsData: topRankProject,
                 topSellingUsers: await this.topRankedSales()
                 
             }
@@ -134,7 +95,7 @@ const DashboardService = {
             return {
                 totalProjects: totalProjects.count,
                 activeSubscriptions: 75,
-                totalSales: `$${sales.valorizado - devoluciones.valorizado}`,
+                totalSales: sales.contador - devoluciones.contador,
                 totalRevenue: `$${sales.valorizado - devoluciones.valorizado + donaciones.valorizado}`,
                 averageSalesPerUser: await this.averageSales(id,fecha),
                 activeProjects: count,
@@ -149,6 +110,7 @@ const DashboardService = {
         try {
             let sales = []
             const products = await this.totalProjects(userId);
+            //console.log(products)
             for (let i = 0; i < products.rows.length;i++) {
                 const subTotal = await this.salesPerProjects(products.rows[i].id, fecha)
                 subTotal[0]? sales.push(subTotal[0]) : null;
@@ -157,6 +119,45 @@ const DashboardService = {
                 valorizado: sales.reduce((total,monto) => total + parseFloat(monto.totalSales), 0),
                 contador: sales.reduce((total,contador) => total + parseInt(contador.Count), 0)
             }
+        } catch (error) {
+            return error
+        }
+    },
+    userSalesDetail: async function (userId,desde,hasta) {
+        try {
+            const ProjectsIds = await Projects.findAll({
+                include: { model: Users, where: {id: userId}, attributes: [] },
+                attributes: ['id']});
+            let userProducts = []
+            for (let i in ProjectsIds) { userProducts.push(ProjectsIds[i].id)}
+            let dates = []
+            //const hasta = new Date(fecha.getFullYear(),fecha.getMonth(),fecha.getDate()+30,0,0,0)
+            while (desde <= hasta) {
+                dates.push(desde)
+                desde = addDays(desde,1)
+            }
+            let ventas = []
+            for (let i in dates) {
+                const data = await Payments.findAll({
+                    where: {
+                        product: userProducts,
+                        createdAt: dates[i],
+                        status: 'completed',
+                        concept: 'venta'
+                    },
+                    attributes: [
+                        ['createdAt', 'fecha'],
+                        [Sequelize.fn('count',Sequelize.col('product')),'proyectosVendidos'],
+                        [Sequelize.fn('sum', Sequelize.col('paymentAmount')), 'ganancias']
+                    ],
+                    group: ['fecha'],
+                    raw: true
+                });
+                data.length !== 0? 
+                    ventas.push({...data[0], fecha: format(data[0].fecha, 'yyyy-MM-dd')}) 
+                    : ventas.push({fecha: format(dates[i], 'yyyy-MM-dd'), proyectosVendidos: 0, ganancias: 0});
+            }
+            return ventas
         } catch (error) {
             return error
         }
@@ -260,7 +261,7 @@ const DashboardService = {
     salesPerProjects: async function (id, fecha) {
         try {
             const hasta = new Date(fecha.getFullYear(),fecha.getMonth(),fecha.getDate()+30,0,0,0)
-            const salesPerProjects = await Payments.findAll({
+            const salesPerProject = await Payments.findAll({
                 attributes: [
                     'product',
                     [Sequelize.fn('sum',Sequelize.col('paymentAmount')), 'totalSales'],
@@ -277,7 +278,8 @@ const DashboardService = {
                 },
                 raw: true,
             });
-            return salesPerProjects.sort((a,b) => b.Count - a.Count)
+            //console.log(salesPerProject.filter((x) => x.length !== 0))
+            return salesPerProject.sort((a,b) => b.Count - a.Count)
         } catch (error) {
             return error
         }
@@ -329,15 +331,13 @@ const DashboardService = {
             });
             return devolutions
         } catch (error) {
-            console.log(error)
             return error
         }
     },
     salesPerMonth: async function (fecha) {
         try {
             const hasta = new Date(fecha.getFullYear(),fecha.getMonth(),fecha.getDate()+30,0,0,0)
-            console.log(fecha)
-            console.log(hasta)
+
             const data = await Payments.findAll({
                 attributes: [
                     'product',
@@ -345,9 +345,10 @@ const DashboardService = {
                     [Sequelize.fn('count',Sequelize.col('paymentAmount')), 'Count']
                 ],
                 //group: ['product'],
-                where: {createdAt: {
-                    [Op.between]: [fecha, hasta]
-                }}
+                where: {
+                    createdAt: {[Op.between]: [fecha, hasta]},
+                    status: 'completed'    
+                }
             })
             return data
         } catch (error) {
