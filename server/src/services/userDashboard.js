@@ -110,7 +110,6 @@ const DashboardService = {
         try {
             let sales = []
             const products = await this.totalProjects(userId);
-            //console.log(products)
             for (let i = 0; i < products.rows.length;i++) {
                 const subTotal = await this.salesPerProjects(products.rows[i].id, fecha)
                 subTotal[0]? sales.push(subTotal[0]) : null;
@@ -131,7 +130,6 @@ const DashboardService = {
             let userProducts = []
             for (let i in ProjectsIds) { userProducts.push(ProjectsIds[i].id)}
             let dates = []
-            //const hasta = new Date(fecha.getFullYear(),fecha.getMonth(),fecha.getDate()+30,0,0,0)
             while (desde <= hasta) {
                 dates.push(desde)
                 desde = addDays(desde,1)
